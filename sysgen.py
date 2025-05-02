@@ -2189,7 +2189,7 @@ class sysgen:
         # This step installs Wally ISPF and Review Front End
 
         self.restore_dasd("34_EXTRAS")
-        self.custjobs_ipl("Installing Wally ISPF and Review Front End with MVP", clpa=True)
+        self.custjobs_ipl("Installing Wally ISPF, Review Front End, and NJE38 with MVP", clpa=True)
         #self.submit_file('jcl/ispf.jcl')
         rakf_admin_user,rakf_admin_password = self.get_rakf_admin()
         self.submit_file_binary_post_rakf(
