@@ -56,7 +56,7 @@ jobs:
         shell: bash
 
       - name: Upload MVS/CE TAR file
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: MVSCE
           path: /mvsce/MVSCE.release.tar
@@ -73,7 +73,7 @@ jobs:
           sparse-checkout: |
             Docker
       - name: Download MVS/CE Tar File
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4
         with:
           name: MVSCE
           path: .
