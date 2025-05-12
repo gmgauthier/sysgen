@@ -34,9 +34,9 @@
          CLI   MSGINDEX,X'02'                                           23164804
          BNE   EGSKIP                                                   23164805
 SPECLMSG DS    0H                                                       23164806
-         MVC   EGDATA(8),NAMEDEV                                        23164806
-         MVC   EGDATA+9(8),APPLID                                       23164807
-         LA    R3,EGMSGLN                                               23164808
+         MVC   EGDATA(8),NAMEDEV                                        23164807
+         MVC   EGDATA+9(8),APPLID                                       23164808
+         LA    R3,EGMSGLN                                               23164809
          L     R4,=A(EGMSG)                                             23164810
 *                                                                       23164812
          WRITE RPL=(PTRRPL),                                           X23164814
