@@ -1,7 +1,7 @@
 ## Docker File for MVS/CE
 # This docker file is for use in github actions
 # To build this container yourself use https://github.com/mvs-sysgen/docker-mvsce
-FROM mainframed767/hercules:4.7.0
+FROM mainframed767/hercules:latest
 WORKDIR /
 USER root
 ADD MVSCE.release.tar /
