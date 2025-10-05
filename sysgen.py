@@ -26,12 +26,16 @@ except ModuleNotFoundError:
 VERSION = "V1R0M0"
 CODENAME = 'UNEXPECTED SLOTH'
 
+# Hercules will frequently crash for some reason, we use this to try 
+# and catch them instead of waiting for the timeout
 error_check = [
                 'open error',
                 'Creating crash dump',
                 'DISASTROUS ERROR',
                 'HHC01023W Waiting for port 3270 to become free for console connections',
-                'disabled wait state 00020000 80000005'
+                'disabled wait state 00020000 80000005',
+                'HHC00839E Processor CP00: ipl failed: architecture mode ESA/390, invalid ipl psw 0000000000000',
+                'PROCESSOR CP00 APPEARS TO BE HUNG!'
               ]
 
 logname='sysgen.log'
@@ -101,7 +105,7 @@ os.chdir(os.path.dirname(sys.argv[0]))
 
 logging.basicConfig(filename=running_folder+logname,
                             filemode='w',
-                            format='%(asctime)s,%(msecs)d %(name)s %(levelname)s %(message)s',
+                            format='%(asctime)s %(msecs)d %(name)s :: %(levelname)s :: %(funcName)s :: %(message)s',
                             datefmt='%H:%M:%S',
                             level=logging.DEBUG)
 
@@ -114,6 +118,15 @@ USERJOB = ('''//{usern}    JOB (1),'ADD TSO USERS',CLASS=S,MSGLEVEL=(1,1),
 //      AC='{acct}',
 //      JC='{jcl}',
 //      MT='{mount}'
+''')
+
+POST_RAKF_JOB_CARD = ('''//{JOBNAME} JOB (SYSGEN),'{DESC}',      
+//             CLASS=A,                     
+//             MSGCLASS=A,                  
+//             MSGLEVEL=(1,1),
+//             USER={USER},
+//             PASSWORD={PASSWORD},
+//             REGION={REGION}
 ''')
 
 class sysgen:
@@ -344,9 +357,9 @@ class sysgen:
             l = pipe.readline()
             if len(l.strip()) > 0:
                 if STDERR_to_logs.is_set():
-                    logging.debug("[DIAG] {}".format(l.strip()))
+                    logging.debug("[DIAG - STDERR] {}".format(l.strip()))
                 if 'MIPS' in l:
-                    logging.debug("[DIAG] {}".format(l.strip()))
+                    logging.debug("[DIAG - STDERR] {}".format(l.strip()))
                 q.put(l)
 
                 for errors in error_check:
@@ -468,7 +481,7 @@ class sysgen:
         self.set_configs('build_starter')
         self.send_herc("ipl 280")
         self.send_herc("/")
-        self.wait_for_string('HHC00010A Enter input for console 0:0009')
+        self.wait_for_string('input for console 0:0009')
         self.print("[1/4] DASDI Initialization of the START1 DASD volume")
         logging.debug("Submitting instart1.sajob")
         self.send_oper("input=1442,00c")
@@ -480,7 +493,7 @@ class sysgen:
         self.send_herc("ipl 280")
         self.wait_for_psw('FFFF')
         self.send_herc("/")
-        self.wait_for_string('HHC00010A Enter input for console 0:0009')
+        self.wait_for_string('input for console 0:0009')
         self.print("[2/4] Performing restore of the START1 DASD volume")
         logging.debug("Submitting rsstart1.sajob")
         self.send_oper("input=1442,00d")
@@ -491,7 +504,7 @@ class sysgen:
         self.send_herc("ipl 281")
         self.wait_for_psw('FFFF')
         self.send_herc("/")
-        self.wait_for_string('HHC00010A Enter input for console 0:0009')
+        self.wait_for_string('input for console 0:0009')
         self.print("[3/4] DASDI Initialization of the SPOOL0 DASD volume")
         logging.debug("Submitting inspool0.sajob")
         self.send_oper("input=1442,00e")
@@ -502,7 +515,7 @@ class sysgen:
         self.send_herc("ipl 281")
         self.wait_for_psw('FFFF')
         self.send_herc("/")
-        self.wait_for_string('HHC00010A Enter input for console 0:0009')
+        self.wait_for_string('input for console 0:0009')
         self.print("[4/4] Performing restore of the SPOOL0 DASD volume")
         logging.debug("Submitting rsspool0.sajob")
         self.send_oper("input=1442,00f")
@@ -533,7 +546,7 @@ class sysgen:
         self.wait_for_string("0:0151 CCKD")
         self.print("Installing SMP 4.44 on the Starter System")
         self.send_herc("ipl 150")
-        self.wait_for_string("HHC00010A Enter input for console 0:001F")
+        self.wait_for_string("input for console 0:001F")
         self.send_oper('r 0,clpa')
         self.wait_for_string("00 $HASP426 SPECIFY OPTIONS - HASP-II, VERSION JES2 4.0")
         self.print("Formatting SPOOL0")
@@ -630,12 +643,12 @@ class sysgen:
         self.send_herc('attach 0012    3505    jcl/smpmount.jcl eof')
         self.send_herc("STOPALL")  # Needed for Hercules 4.5?
         self.send_herc("ipl 150")
-        self.wait_for_string("HHC00010A Enter input for console 0:001F")
+        self.wait_for_string("input for console 0:001F")
         self.send_herc('/')
         self.wait_for_string("$HASP426 SPECIFY OPTIONS - HASP-II, VERSION JES2 4.0")
         self.send_oper('r 0,noreq')
         self.wait_for_string("IEF166D REPLY Y/N TO EXECUTE/SUPPRESS COMMAND")
-        self.print("Assingning the volume SMP000 to the class of PRIVATE")
+        self.print("Assigning the volume SMP000 to the class of PRIVATE")
         self.send_reply('y')
         self.wait_for_string("$HASP099 ALL AVAILABLE FUNCTIONS COMPLETE")
 
@@ -785,7 +798,7 @@ class sysgen:
         self.send_herc('detach 0012')
         self.send_herc('attach 0012    3505    jcl/null.jcl eof')
         self.send_herc("ipl 150")
-        self.wait_for_string("HHC00010A Enter input for console 0:001F")
+        self.wait_for_string("input for console 0:001F")
         self.send_herc('/')
         self.wait_for_string("$HASP426 SPECIFY OPTIONS - HASP-II, VERSION JES2 4.0")
         self.send_oper('r 0,noreq')
@@ -865,7 +878,7 @@ class sysgen:
         self.set_configs('sysgen2')
         #self.wait_for_string("0:0151 CKD")
         self.send_herc("ipl 150")
-        self.wait_for_string("HHC00010A Enter input for console 0:001F")
+        self.wait_for_string("input for console 0:001F")
         self.send_oper('r 0,clpa')
         self.wait_for_string("00 $HASP426 SPECIFY OPTIONS - HASP-II, VERSION JES2 4.0")
         self.send_oper('r 0,noreq')
@@ -887,7 +900,7 @@ class sysgen:
         self.set_configs('sysgen')
         #self.wait_for_string("0:0151 CKD")
         self.send_herc("ipl 150")
-        self.wait_for_string("HHC00010A Enter input for console 0:001F")
+        self.wait_for_string("input for console 0:001F")
         self.send_oper('r 0,clpa')
         self.wait_for_string("00 $HASP426 SPECIFY OPTIONS - HASP-II, VERSION JES2 4.0")
         self.send_oper('r 0,noreq')
@@ -1504,10 +1517,11 @@ class sysgen:
             restore = "usermod_{:02}_{}".format(backup_num-1,usermods[s-1])
 
         self.print("Step 5. Applying Usermods",color="CYAN")
+        count = 1
         for umod in umods:
             self.set_step("step_05_usermods",umod)
             self.restore_dasd(restore)
-            self.sysgenjobs_ipl("Applying usermod {}: {}".format(umod, umods_desc[umod]))
+            self.sysgenjobs_ipl(f"Applying usermod ({count}/{len(umods)}) {umod}: {umods_desc[umod]}")
             cmd = "devinit 12 usermods/{}.jcl eof trunc {}"
             if umod in EBCDIC_mods:
                 self.send_herc(cmd.format(umod,'ebcdic'))
@@ -1521,6 +1535,7 @@ class sysgen:
             restore = "usermod_{:02}_{}".format(backup_num,umod)
             backup_num += 1
             self.backup_dasd(restore)
+            count += 1
 
         self.backup_dasd("25_USERMODS")
 
@@ -1598,7 +1613,7 @@ class sysgen:
         self.set_configs('customization')
         #self.wait_for_string("0:0151 CKD")
         self.send_herc("ipl 150")
-        self.wait_for_string("HHC00010A Enter input for console 0:0009")
+        self.wait_for_string("input for console 0:0009")
         self.send_oper('r 0,clpa')
         self.wait_for_string("IFB010D ENTER 'IPL REASON,SUBSYSTEM ID' OR 'U'")
         self.send_reply('u')
@@ -1681,7 +1696,7 @@ class sysgen:
         jobcard = "//{userid}A JOB (1),'ADDUSER',CLASS=S,MSGLEVEL=(1,1),MSGCLASS=A\n"
 
 
-        with open("users.conf", 'r') as users:
+        with open(self.users, 'r') as users:
             for user in users:
                 if "#" in user[0]:
                     # comment skipped
@@ -1788,7 +1803,7 @@ class sysgen:
         self.set_configs('customization2')
         #self.wait_for_string("0:0151 CKD")
         self.send_herc("ipl 150")
-        self.wait_for_string("HHC00010A Enter input for console 0:0009")
+        self.wait_for_string("input for console 0:0009")
         if clpa:
             self.send_oper("r 0,clpa")
         else:
@@ -1798,11 +1813,16 @@ class sysgen:
         self.wait_for_string("$HASP099 ALL AVAILABLE FUNCTIONS COMPLETE")
 
     def shutdown_mvs(self, cust=False):
+        logging.debug('Shutting down MVS')
         self.send_oper('$p jes2')
         if cust:
             self.wait_for_string('IEF404I JES2 - ENDED - ')
         else:
             self.wait_for_string('IEF196I IEF285I   VOL SER NOS= SPOOL0.')
+
+        # WRL Give MVS / JES2 time to catch up
+        time.sleep(5)
+
         self.send_oper('z eod')
         self.wait_for_string('IEE334I HALT     EOD SUCCESSFUL')
         self.send_oper('quiesce')
@@ -1924,6 +1944,7 @@ class sysgen:
         if self.skip_steps:
             self.skip_steps = False
         # drain STDERR and STDOUT
+        logging.debug('Draining STDOUT/STDERR')
         while True:
             try:
                 line = self.stdout_q.get(False).strip()
@@ -1936,6 +1957,7 @@ class sysgen:
             except queue.Empty:
                 break
 
+        logging.debug('Reset Herc Event')
         reset_herc_event.set()
 
         if not self.herccmd:
@@ -1965,6 +1987,8 @@ class sysgen:
 
 
     def quit_hercules(self, msg=True):
+
+        logging.debug("Quitting Hercules")
         if msg:
             self.print("Shutting down hercules")
         if not self.hercproc or self.hercproc.poll() is not None:
@@ -1973,7 +1997,7 @@ class sysgen:
         quit_herc_event.set()
         self.send_herc('quit')
         # self.wait_for_string('Hercules shutdown complete', stderr=True)
-        self.wait_for_string('Hercules terminated', stderr=True)
+        self.wait_for_strings(['Hercules terminated','dyngui.dll terminated'], stderr=True)
         if msg:
             self.print('Hercules has exited')
 
@@ -2016,6 +2040,55 @@ class sysgen:
                     else:
                         line = self.stdout_q.get(False).strip()
                     continue
+                logging.debug(f"String: '{string_to_waitfor} found in '{line}'")
+                return
+
+            except queue.Empty:
+                continue
+
+    def wait_for_strings(self, strings_to_waitfor=[], stderr=False, timeout=False):
+        '''
+           Reads stdout queue waiting for expected response, default is
+           to check STDOUT queue, set stderr=True to check stderr queue instead
+           default timeout is 30 minutes
+        '''
+        time_started = time.time()
+
+        if not timeout:
+            timeout = 1800
+
+        if self.timeout:
+            timeout=int(self.timeout)
+
+        logging.debug("Waiting for Strings to appear in hercules log: {}".format(strings_to_waitfor))
+
+        while True:
+            if time.time() > time_started + timeout:
+                if self.substep:
+                    exception = "Step: {} Substep: {} took too long".format(self.step, self.substep)
+                    log = "Step: {} Substep: {} Timeout Exceeded {} seconds".format(self.step, self.substep, timeout)
+                else:
+                    exception = "Step: {} Timeout".format(self.step, self.substep)
+                    log = "Step: {} Timeout Exceeded {} seconds".format(self.step, self.substep, timeout)
+                logging.debug(log)
+                raise Exception(exception)
+
+            try:
+                if stderr:
+                    line = self.stderr_q.get(False).strip()
+                else:
+                    line = self.stdout_q.get(False).strip()
+
+                while not any(string in line for string in strings_to_waitfor):
+                    
+                    if stderr:
+                        line = self.stderr_q.get(False).strip()
+                    else:
+                        line = self.stdout_q.get(False).strip()
+                    continue
+                
+                logging.debug(f"String: '{strings_to_waitfor} found in '{line}'")
+                
                 return
 
             except queue.Empty:
@@ -2063,21 +2136,7 @@ class sysgen:
         self.custjobs_ipl("Installing MVP", clpa=True)
         self.git_clone("https://github.com/MVS-sysgen/MVP", out_folder="MVSCE")
         
-        rakf_admin_user = ''
-        rakf_admin_password = ''
-
-        with open("temp/rakf_users.txt", 'r') as rakf_users:
-            for u in rakf_users.readlines():
-                if len(u.split()) > 0: # skip blank lines
-                    un = u.split()[0]
-                    gp = u.split()[1]
-                    pw = u.strip()[18:-1]
-                    if gp == 'RAKFADM':
-                        rakf_admin_user = un
-                        rakf_admin_password = pw
-                        break
-        if not rakf_admin_user:
-            raise Exception('Unable to find RAKFADM user for MVP install in temp/rakf_users.txt')
+        rakf_admin_user,rakf_admin_password = self.get_rakf_admin()
 
         self.print("MVP install user: {}".format(rakf_admin_user))
         x= subprocess.check_output(['MVSCE/MVP/MVP',
@@ -2100,7 +2159,23 @@ class sysgen:
 
         self.restore_dasd("33_MVP")
         self.custjobs_ipl("Adding support for indirect cataloging using VOLUME(******) (Usermods ZP60041, ZP60042, ZP60043)", clpa=True)
-        self.submit_file_binary('usermods/ZP60041.jcl')
+        '''
+        //ZP60041  JOB (SYSGEN),'ZP60041 + 42 + 43',
+        //             CLASS=A,
+        //             MSGCLASS=A,
+        //             MSGLEVEL=(1,1),
+        //             REGION=4096K,USER=IBMUSER,PASSWORD=SYS1
+        '''
+        rakf_admin_user,rakf_admin_password = self.get_rakf_admin()
+
+        #self.submit_file_binary('jcl/ZP60041.jcl')
+
+        self.submit_file_binary_post_rakf(
+            jclfile='jcl/ZP60041.jcl',
+            jobname='ZP60041',
+            user=rakf_admin_user,password=rakf_admin_password,
+            desc='ZP60041 + 42 + 43',
+            region='4096K')
         self.wait_for_string("$HASP099 ALL AVAILABLE FUNCTIONS COMPLETE")
         self.check_maxcc("ZP60041")
         self.shutdown_mvs(cust=True)
@@ -2111,11 +2186,17 @@ class sysgen:
         self.set_step("step_11_ispf")
 
         self.print("Step 11. Installing Wally ISPF", color="CYAN")
-        # This (optional but default) step installs Wally ISPF and Review Front End
+        # This step installs Wally ISPF and Review Front End
 
         self.restore_dasd("34_EXTRAS")
-        self.custjobs_ipl("Installing Wally ISPF and Review Front End", clpa=True)
-        self.submit_file('jcl/ispf.jcl')
+        self.custjobs_ipl("Installing Wally ISPF, Review Front End, and NJE38 with MVP", clpa=True)
+        #self.submit_file('jcl/ispf.jcl')
+        rakf_admin_user,rakf_admin_password = self.get_rakf_admin()
+        self.submit_file_binary_post_rakf(
+            jclfile='jcl/ispf.jcl',
+            jobname='MVPISPF',
+            user=rakf_admin_user,password=rakf_admin_password,
+            desc='MVP INSTALL')
         self.wait_for_string("$HASP099 ALL AVAILABLE FUNCTIONS COMPLETE")
         self.check_maxcc("MVPISPF")
         self.shutdown_mvs(cust=True)
@@ -2123,6 +2204,7 @@ class sysgen:
         self.backup_dasd("35_ISPF")
 
     def step_12_cleanup(self):
+        self.set_step("step_12_cleanup")
         self.print("Step 12. Finalizing and Cleaning Up", color="CYAN")
 
         self.finalize()
@@ -2147,7 +2229,9 @@ class sysgen:
         Path(running_folder+"MVSCE/punchcards").mkdir(parents=True, exist_ok=True)
 
         self.print("Copying scripts to {}".format(Path(running_folder+"MVSCE/SCRIPTS").resolve()))
-        shutil.copytree(Path('SCRIPTS').resolve(), Path(running_folder+"MVSCE/SCRIPTS").resolve(),dirs_exist_ok=True)
+
+        # WRL overwrite existing target directory
+        shutil.copytree(Path('SCRIPTS').resolve(), Path(running_folder+"MVSCE/SCRIPTS").resolve(), dirs_exist_ok=True)
 
         up = "| {:9} | {:8}|\n"
 
@@ -2203,13 +2287,36 @@ class sysgen:
             self.restore_dasd("35_ISPF")
 
         self.custjobs_ipl("Customizing SYS1.PARMLIB(COMMND00)", clpa=True)
-        self.submit_file('jcl/finalize.jcl')
+        #self.submit_file('jcl/finalize.jcl')
+
+        rakf_admin_user,rakf_admin_password = self.get_rakf_admin()
+        self.submit_file_binary_post_rakf(
+            jclfile='jcl/finalize.jcl',
+            jobname='FINALIZE',
+            user=rakf_admin_user,password=rakf_admin_password,
+            desc='Finalize MVSCE')
         self.wait_for_string("$HASP099 ALL AVAILABLE FUNCTIONS COMPLETE")
         self.check_maxcc("FINALIZE")
         self.shutdown_mvs(cust=True)
         self.quit_hercules(msg=False)
         self.backup_dasd("36_FINAL")
 
+    def get_rakf_admin(self,rakf_file='temp/rakf_users.txt'):
+        rakf_admin_user = ''
+        rakf_admin_password = ''
+        with open(rakf_file, 'r') as rakf_users:
+            for u in rakf_users.readlines():
+                if len(u.split()) > 0: # skip blank lines
+                    un = u.split()[0]
+                    gp = u.split()[1]
+                    pw = u.strip()[18:-1]
+                    if gp == 'RAKFADM':
+                        rakf_admin_user = un.strip()
+                        rakf_admin_password = pw.strip()
+                        break
+        if not rakf_admin_user:
+            raise Exception('Unable to find a RAKFADM user in {}'.format(rakf_file))
+        return rakf_admin_user,rakf_admin_password
 
     def dasdinit(self, dasd_to_create):
         '''Creates empty dasd, argument is one of starter, distribution_libs, sysgen, user'''
@@ -2292,6 +2399,8 @@ class sysgen:
             folder.format(out_folder, repo.split("/")[-1])
         ]
 
+        logging.debug(f"Git clone {repo} with: {args}")
+
         rc = subprocess.call(args, stderr=subprocess.DEVNULL, stdout=subprocess.DEVNULL)
 
     def submit_file(self, jclfile, host='127.0.0.1',port=3505):
@@ -2300,6 +2409,36 @@ class sysgen:
             jcl = f.read()
             self.submit(jcl)
 
+    def submit_file_binary_post_rakf(self, 
+                                     jclfile, 
+                                     jobname,user,password,
+                                     host='127.0.0.1',port=3505,
+                                     desc='INSTALL',
+                                     region='8192K',
+                                     ):
+        ''' Submits a job after RAKF has been installed and generates 
+            the jobcard
+            jobname = jobname
+            user = user with admin rights
+            password = password for that user
+            desc = programmer name
+            region = region
+        '''
+
+        jobcard = POST_RAKF_JOB_CARD.format(JOBNAME=jobname,DESC=desc,USER=user,PASSWORD=password,REGION=region)
+        logging.debug("[SUBMIT BINARY POST RAKF] Submitting {} with user {}".format(jclfile,user))
+
+        with open(jclfile, 'rb') as f:
+            jcl = f.read()
+
+            sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+
+            try:
+                # Connect to server and send data
+                sock.connect((host, port))
+                sock.send(jobcard.encode() + jcl)
+            finally:
+                sock.close()
 
     def submit_file_binary(self, jclfile, host='127.0.0.1',port=3505):
         logging.debug("[SUBMIT BINARY] Submitting {}".format(jclfile))

@@ -10,6 +10,7 @@ Requirements:
 - hercules SDL >= 4.5 (see below how to build SDL Hercules)
 - python3
 - git
+- tar
 
 The following is also recommended:
 
@@ -92,10 +93,12 @@ Currently only Debian/Ubuntu based systems are supported. If your system require
 
 Running MVS/CE sysgen will:
 
-- Compile the newest version of SDL Hercules and install it
 - Build a modified Jay Moseley sysgen MVS 3.8J
 - Install BREXX
 - Install RAKF
+- Install RFE
+- Install Wally ISPF
+- Create the folder MVSCE and store the completed sysgen there
 
 To build MVS/CE use `sysgen.py`. This python script can take many arguments:
 
@@ -109,6 +112,17 @@ To build MVS/CE use `sysgen.py`. This python script can take many arguments:
 - `--keep-backup` This script backups after every step then removes the backups when completed, if you'd like to keep the backup DASD images use this flag
 - `--keep-temp` This script generates multiple temp files during sysgen and removes the folder when completed, if you wish to keep the temp files pass this flag
 
+Assuming you have all the prerequisites installed (git, tar, python3 and
+ hercules) the recommended command used to build sysgen is:
+
+```bash
+until ./sysgen.py --CONTINUE; do echo "Failed, rerunning"; done
+```
+
+This until loop will run until sysgen is complete. This is due to multiple
+bugs in hercules which may cause it to fail and which is typically fixed
+by rerunning the failed step.
+
 ### Automation control options
 
 The arguments below are for more granular control of where to start sysgen from. These can be used if a step has failed of if you make changes to a step and start the install from that step instead of starting over. Some steps are atomic, some have multiple sub steps. With the arguments below you can continue/restart from either.
@@ -118,6 +132,8 @@ The arguments below are for more granular control of where to start sysgen from.
 - `--substep` Restart sysgen from a steps substep.
 
 - `-C` or `--CONTINUE` If sysgen fails for any reason a file (`.step`) is created prior to exit, this argument reads that file and continues building MVS/CE from where it left off. This superscedes the `--step` and `--substep` arguments.
+
+:warning: By default sysgen will remove the temp and backup folders. If you're doing development work you can use the `--keep-backup` and `--keep-temp` arguments to keep those folders after systen completes allowing you to restart sysgen at any point. 
 
 
 ## Usernames/Passwords
@@ -136,8 +152,8 @@ You can add a admin user using the `--username` flag. To add more users edit the
 
 ## Changes From Jay Moseley Sysgen
 
-* Added usermod `SYZJ2001` which adds job cc to notification in TSO
-* Added RAKF, and BREXX
+* Added multiple usermods
+* Added RAKF, BREXX, RFE, and ISPF
 * Installed usermod `DYNPROC` which allows for dynamic proclibs
 * Seperated out usermods to their own JCL for better automation control
 * Added `S NET` and changed JES2 startup parms in `sys1.parmlib(COMMND00)`
@@ -145,7 +161,8 @@ You can add a admin user using the `--username` flag. To add more users edit the
 * Adds version to NETSOL
 * Added `SYS1.PARMLIB(RELEASE)` which contains release information
 
-And many more. See the branch `original` which tracked changes to the original sysgen
+And many more. See the branch `original` which tracked changes to the original sysgen and the git log
+to see the hundred of other changes since the initial release.
 
 ## Info
 

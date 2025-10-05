@@ -15,43 +15,30 @@ jobs:
     name: MVS 3.8j System Generation
     runs-on: [ubuntu-latest]
     #timeout-minutes: 70
-    container: mainframed767/hercules:develop
-
+    container: 
+      image: mainframed767/hercules:4.7.0
+      options: --user root
     steps:
 
       - name: Checkout
-        uses: actions/checkout@v2
+        uses: actions/checkout@v4
 
       - name: Move MVS/CE sysgen
         run: |
           mkdir -p /mvsce/
           mv * /mvsce/
+          touch /mvsce/MVSCE.release.tar
         shell: bash
-      
-      - name: Set up Python 3.8
-      #  uses: actions/setup-python@v1
-      #  with:
-      #    python-version: 3.8
+        
+      - name: Set up Python 3
         run: |
           apt-get update
           apt-get -yq install --no-install-recommends python3 python3-pip git
-          
-      - name: Install pip/colorama
-        run: |
-          pip3 install --quiet colorama
-      #- uses: BSFishy/pip-action@v1
-      #  with:
-      #    packages: colorama
 
-      - name: Running sysgen.py
+      - name: Building MVS/CE
         id: sysgen
         working-directory: /mvsce
         run: until ./sysgen.py --release --timeout 500 --version ${GITHUB_SHA} --CONTINUE; do echo "Failed, rerunning"; done
-
-      - name: Printing Debug Log
-        if: ${{ always() && (steps.sysgen.outcome == 'failure') }}
-        working-directory: /mvsce
-        run: cat sysgen.log
 
       - uses: "marvinpinto/action-automatic-releases@latest"
         with:
@@ -62,3 +49,46 @@ jobs:
           files: |
             /mvsce/MVSCE/README.md
             /mvsce/MVSCE.release.*.tar
+      - name: Move MVS/CE TAR file
+        run: |
+          mv /mvsce/MVSCE.release.*.tar /mvsce/MVSCE.release.tar
+        shell: bash
+
+      - name: Upload MVS/CE TAR file
+        uses: actions/upload-artifact@v4
+        with:
+          name: MVSCE
+          path: /mvsce/MVSCE.release.tar
+
+  mvsce-docker:
+    needs: mvsce-sysgen
+    name: MVS/CE Cross Platform Docker Upload
+    runs-on: [ubuntu-latest]     
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          sparse-checkout: |
+            Docker
+      - name: Download MVS/CE Tar File
+        uses: actions/download-artifact@v4
+        with:
+          name: MVSCE
+          path: .
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+      - name: Login to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+      - name: Build and push
+        uses: docker/build-push-action@v5
+        with:
+          file: Docker/Dockerfile.latest
+          context: .
+          platforms: linux/amd64,linux/arm64,linux/s390x,linux/riscv64
+          push: true
+          tags: mainframed767/mvsce:latest
